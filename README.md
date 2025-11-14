@@ -234,13 +234,9 @@ git push origin add-health-endpoint
 - Select your `add-health-endpoint` branch
 - Click "Create pull request"
 
-**Watch the workflow run:**
+GitHub provides a nice UI to watch our workflow run. You should see a window in your PR that shows the status of the workflow being executed. You can click into this to get the exact logs that happened at each step of our workflow, which is great for debugging when your tests fail!
 
-- You'll see a yellow dot next to your commit that changes to a green checkmark (or red X if it fails)
-- Click "Details" to see the full workflow execution logs
-- You should see all steps complete successfully
-
-This is great, but wouldn't it be nice to see the test results directly in the PR? Let's add that.
+Although, wouldn't it be even nicer to see the test results directly in the PR? Let's add that.
 
 ## Part 4: Adding PR Comments with Test Results
 
