@@ -1,0 +1,37 @@
+name: CI - Pull Request Checks
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -t echo-api:test .
+
+      - name: Run container
+        run: |
+          docker run -d -p 8000:8000 --name echo-api echo-api:test
+          # Wait for container to be ready
+          sleep 3
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest httpx
+
+      - name: Run tests against container
+        run: |
+          pytest tests/ -v
+
+      - name: Stop container
+        if: always()
+        run: |
+          docker stop echo-api || true
+          docker rm echo-api || true
