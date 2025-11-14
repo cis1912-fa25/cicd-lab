@@ -126,7 +126,7 @@ Great! Now that we know everything works locally, let's automate this with GitHu
 
 ## Part 2: Creating the CI Workflow
 
-GitHub Actions workflows are defined in YAML files under `.github/workflows/`. This is the beauty of GitHub Actions, we don't need to spin up any additional infrastructure to run our CI/CD pipelines, GitHub handles all of it for us automatically based on the files we define! Otherwise, you would need to spin up various pieces of infrastructure, such as nodes to watch the repository and worker nodes to execute each step in the pipelines.
+GitHub Actions workflows are defined in YML files under `.github/workflows/`. This is the beauty of GitHub Actions, we don't need to spin up any additional infrastructure to run our CI/CD pipelines, GitHub handles all of it for us automatically based on the files we define! Otherwise, you would need to spin up various pieces of infrastructure, such as nodes to watch the repository and worker nodes to execute each step in the pipelines.
 
 Let's create our first workflow. First, create the github workflow directory:
 
@@ -134,9 +134,9 @@ Let's create our first workflow. First, create the github workflow directory:
 mkdir -p .github/workflows
 ```
 
-Then, create a file `.github/workflows/ci.yaml` and put the following inside:
+Then, create a file `.github/workflows/ci.yml` and put the following inside:
 
-```yaml
+```yml
 name: CI - Pull Request Checks
 
 on:
@@ -185,7 +185,7 @@ If you're interested, the [workflow syntax documentation](https://docs.github.co
 **Commit and push this workflow:**
 
 ```bash
-git add .github/workflows/ci.yaml
+git add .github/workflows/ci.yml
 git commit -m "Add CI workflow for pull requests"
 git push origin main
 ```
@@ -246,9 +246,9 @@ This is great, but wouldn't it be nice to see the test results directly in the P
 
 We'll enhance our CI workflow to post test results as a comment on the PR. This gives reviewers immediate visibility into what passed or failed.
 
-**Update `.github/workflows/ci.yaml`:**
+**Update `.github/workflows/ci.yml`:**
 
-```yaml
+```yml
 name: CI - Pull Request Checks
 
 on:
@@ -370,7 +370,7 @@ Now let's create a separate workflow that runs when code is merged to main. This
 
 **Create `.github/workflows/cd.yml`:**
 
-```yaml
+```yml
 name: CD - Deploy to Docker Hub
 
 on:
@@ -529,7 +529,7 @@ sequenceDiagram
 In production environments, you'd typically extend this pipeline with:
 
 **Security Scanning**:
-```yaml
+```yml
 - name: Run Trivy security scan
   uses: aquasecurity/trivy-action@master
   with:
@@ -539,7 +539,7 @@ In production environments, you'd typically extend this pipeline with:
 ```
 
 **Code Coverage**:
-```yaml
+```yml
 - name: Generate coverage report
   run: |
     pytest tests/ --cov=app --cov-report=html
