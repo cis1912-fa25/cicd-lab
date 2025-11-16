@@ -1,14 +1,4 @@
-+++
-title = "CI/CD with GitHub Actions"
-date = 2025-11-13
-description = "Build a complete CI/CD pipeline using GitHub Actions and Docker Hub"
-+++
-
 # CI/CD with GitHub Actions
-
-<!-- TODO: Add GitHub Classroom link or commit hash -->
-
-## Introduction
 
 In this lab, we'll build a complete CI/CD pipeline for a simple FastAPI application using GitHub Actions. When you open a pull request, GitHub Actions will automatically run your tests, build your Docker image, and report the results back as a comment. When you merge to main, it will build and push your Docker image to Docker Hub, making it available for deployment anywhere (which makes this a Continuous Delivery instead of Continuous Deployment).
 
@@ -42,34 +32,25 @@ This should be a familiar setup that uses `uv` and Docker. The FastAPI applicati
 Before we dive into implementation, let's understand what we're building:
 
 ```mermaid
+%%{init: {'theme':'dark'}}%%
 graph LR
     A[Developer pushes code] --> B[GitHub detects change]
     B --> C{Which branch?}
     C -->|Pull Request| D[CI Workflow]
     C -->|Main Branch| E[CD Workflow]
-
-    D --> D1[Run Tests in Container]
-    D1 --> D2[Build Docker Image]
-    D2 --> D3[Post Results as PR Comment]
-
-    E --> E1[Run Tests]
-    E1 --> E2[Build Docker Image]
-    E2 --> E3[Push to Docker Hub]
-    E3 --> E4[Tag with version]
 ```
 
 **Continuous Integration (CI)** runs on every pull request:
 
-- Builds the Docker image
-- Runs tests inside the container
+- Runs tests
 - Reports results back to the PR
-
-**Continuous Deployment (CD)** runs when code merges to main (after a PR lands):
-
 - Builds the Docker image
-- Runs tests to verify
-- Pushes the image to Docker Hub with proper tags
-- Makes the image available for deployment
+
+**Continuous Deployment (CD)** runs when code merges to main, which should effectively only ever be after a PR lands:
+
+- Runs tests
+- Builds the Docker image
+- Pushes the image to Docker Hub
 
 ## Part 1: Testing Locally
 
@@ -332,7 +313,7 @@ Before we can push images to Docker Hub, we need to do some configuration to get
 
 **Create a Docker Hub access token:**
 
-1. Log in to https://hub.docker.com
+1. Log in to <https://hub.docker.com>
 2. Go to "Account Settings" and click "Personal access tokens" on the left
 3. Click "Generate new token"
 4. Name it something like "github-actions" and give it "Read & Write" permissions
@@ -356,7 +337,7 @@ These secrets are encrypted and only available to your workflows. Never commit c
 
 ## Part 6: Creating the CD Workflow
 
-Now let's create a separate workflow that runs when code is merged to main. This will build and push our Docker image to Docker Hub.
+Now let's create a separate workflow (CD) that runs when code is merged to main. This will build and push our Docker image to Docker Hub, which should ultimately represent a production ready image.
 
 **Create `.github/workflows/cd.yml`:**
 
@@ -384,9 +365,6 @@ jobs:
       - name: Run unit tests
         run: uv run pytest -v
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -401,27 +379,12 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/echo-api:latest
 ```
 
-This workflow begins quite similarly to what we have defined for our CI workflow. Namely, we install uv and dependencies, then run tests. However, then, we additionally build
-
-**Trigger**: Runs on every push to main (i.e., when PRs are merged)
-
-**Docker Buildx**: Advanced builder with better caching and multi-platform support
-
-**Login**: Authenticates to Docker Hub using your secrets
-
-**Metadata extraction**: Automatically generates image tags:
-
-- `main-<git-sha>`: Unique tag for this commit
-- `latest`: Always points to the most recent main build
-
-**Build and test**: Runs tests before pushing (safety check)
-
-**Build and push**: Uses GitHub Actions cache to speed up builds
+This workflow begins quite similarly to what we have defined for our CI workflow. Namely, we install uv and dependencies, then run tests. However, then, we additionally login and push our Docker image to the Docker Hub repository we created. Note how we use secrets, GitHub Actions makes it easy for us to reference the secrets that we created earlier!
 
 **Commit the CD workflow:**
+
 ```bash
 git checkout main
-git pull
 git add .github/workflows/cd.yml
 git commit -m "Add CD workflow for Docker Hub deployment"
 git push origin main
@@ -432,44 +395,19 @@ git push origin main
 Now let's see the complete CI/CD pipeline in action!
 
 **Merge your pull request:**
+
 - Go to your PR on GitHub
 - Click "Merge pull request"
 - Confirm the merge
 
-**Watch what happens:**
+This will land your change onto the main branch, which should trigger the CD workflow we just created. You can go to the "Actions" tab on your repository to view the status of the job. You should see a job being executed (or already executed) that has the same name as the PR you merged. When it finishes, navigate to the repository you created on Docker Hub and you should now see an image there! Note that anyone can now pull and run your image since your repository is public.
 
-1. **CI workflow completes** on the PR (should already be green)
-2. **CD workflow triggers** automatically when main is updated
-3. **Go to Actions tab** and watch the "CD - Deploy to Docker Hub" workflow
+## Recap
 
-When it completes:
-- Go to Docker Hub → Your repository
-- You should see two tags:
-  - `latest`
-  - `main-<commit-sha>`
-
-**Test the deployed image:**
-
-Anyone can now pull and run your image:
-
-```bash
-docker pull <your-dockerhub-username>/echo-api:latest
-docker run -d -p 8000:8000 --name production-api <your-dockerhub-username>/echo-api:latest
-curl http://localhost:8000/health
-```
-
-You should see:
-```json
-{"status":"healthy"}
-```
-
-This is a production-ready image that was automatically built, tested, and deployed by your CI/CD pipeline!
-
-## Understanding the Complete Pipeline
-
-Let's trace what happens from code to deployment:
+The life-cycle of code in this particular setup would be as follows:
 
 ```mermaid
+%%{init: {'theme':'dark'}}%%
 sequenceDiagram
     participant Dev as Developer
     participant GH as GitHub
@@ -480,96 +418,23 @@ sequenceDiagram
 
     Dev->>GH: Push branch & open PR
     GH->>CI: Trigger CI workflow
+    CI->>CI: Run tests
     CI->>CI: Build Docker image
-    CI->>CI: Run tests in container
     CI->>GH: Post test results as comment
 
     Dev->>GH: Merge PR to main
     GH->>CD: Trigger CD workflow
-    CD->>CD: Build Docker image
     CD->>CD: Run tests
+    CD->>CD: Build Docker image
     CD->>DH: Push image with tags
 
     Prod->>DH: Pull latest image
     Prod->>Prod: Deploy container
 ```
 
-**Why this architecture matters:**
-
-1. **Fast Feedback**: Developers see test results immediately on PRs
-2. **Quality Gates**: Nothing reaches main without passing tests
-3. **Automation**: Zero manual steps from commit to deployment
-4. **Reproducibility**: Every build is identical and traceable
-5. **Rollback**: Can deploy any previous version using commit SHA tags
-
-## Real-World Extensions
-
-In production environments, you'd typically extend this pipeline with:
-
-**Security Scanning**:
-```yml
-- name: Run Trivy security scan
-  uses: aquasecurity/trivy-action@master
-  with:
-    image-ref: ${{ secrets.DOCKER_USERNAME }}/echo-api:latest
-    format: 'sarif'
-    output: 'trivy-results.sarif'
-```
-
-**Code Coverage**:
-```yml
-- name: Generate coverage report
-  run: |
-    pytest tests/ --cov=app --cov-report=html
-
-- name: Upload coverage to PR
-  # Post coverage percentage as PR comment
-```
-
-**Multi-environment Deployment**:
-- Deploy to staging automatically on main
-- Deploy to production with manual approval
-- Use different tags for different environments
-
-**Kubernetes Integration**:
-- Update Kubernetes manifests with new image tags
-- Trigger ArgoCD or Flux to sync changes
-- Automated canary or blue-green deployments
-
-## Cleanup
-
-**Stop and remove local containers:**
-```bash
-docker stop production-api
-docker rm production-api
-```
-
-**Optional - Remove Docker images:**
-```bash
-docker rmi echo-api:local
-docker rmi echo-api:test
-docker rmi <your-dockerhub-username>/echo-api:latest
-```
-
-**Keep your GitHub repository** - this is a portfolio piece showing you understand CI/CD!
-
-## Key Takeaways
-
-You've built a complete CI/CD pipeline that:
-
-✅ Automatically tests every pull request
-✅ Posts test results as PR comments
-✅ Builds and pushes Docker images on merge
-✅ Tags images with commit SHAs for traceability
-✅ Uses GitHub Actions cache for faster builds
-✅ Manages secrets securely
-
-This is the foundation of how professional teams ship software. Every code change is automatically validated, built, and made ready for deployment. No manual steps, no "it works on my machine" problems, just reliable, repeatable delivery.
-
 ## Additional Resources
 
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [Docker Build Push Action](https://github.com/docker/build-push-action)
-- [Docker Hub Quickstart](https://docs.docker.com/docker-hub/quickstart/)
 - [FastAPI Testing Guide](https://fastapi.tiangolo.com/tutorial/testing/)
 - [Semantic Versioning](https://semver.org/)
