@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -18,9 +22,43 @@ jobs:
       - name: Install project
         run: uv sync --locked --all-extras --dev
 
-      - name: Run unit tests
+      - name: Run tests and capture output
+        id: pytest
         run: |
-          uv run pytest -v
+          set +e  # Don't exit on failure
+          uv run pytest -v --tb=short > test_output.txt 2>&1
+          TEST_EXIT_CODE=$?
+          echo "exit_code=$TEST_EXIT_CODE" >> $GITHUB_OUTPUT
+          cat test_output.txt
+          exit $TEST_EXIT_CODE
+
+      - name: Post test results to PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const testOutput = fs.readFileSync('test_output.txt', 'utf8');
+            const exitCode = '${{ steps.pytest.outputs.exit_code }}';
+            const status = exitCode === '0' ? '✅ All tests passed!' : '❌ Tests failed';
+
+            const body = `## ${status}
+
+            <details>
+            <summary>Test Results</summary>
+
+            \`\`\`
+            ${testOutput}
+            \`\`\`
+
+            </details>`;
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
 
       - name: Build Docker image
         run: |
