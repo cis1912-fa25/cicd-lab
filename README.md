@@ -158,12 +158,10 @@ jobs:
         run: uv sync --locked --all-extras --dev
 
       - name: Run unit tests
-        run: |
-          uv run pytest -v
+        run: uv run pytest -v
 
       - name: Build Docker image
-        run: |
-          docker build -t echo-api:test .
+        run: docker build -t echo-api:test .
 ```
 
 Let's break down what this workflow does:
@@ -261,26 +259,19 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Build Docker image
-        run: |
-          docker build -t echo-api:test .
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
 
-      - name: Run container
-        run: |
-          docker run -d -p 8000:8000 --name echo-api echo-api:test
-          sleep 3
-
-      - name: Install test dependencies
-        run: |
-          pip install pytest httpx
+      - name: Install project
+        run: uv sync --locked --all-extras --dev
 
       - name: Run tests and capture output
         id: pytest
         run: |
           set +e  # Don't exit on failure
-          pytest tests/ -v --tb=short > test_output.txt 2>&1
+          uv run pytest -v --tb=short > test_output.txt 2>&1
           TEST_EXIT_CODE=$?
           echo "exit_code=$TEST_EXIT_CODE" >> $GITHUB_OUTPUT
           cat test_output.txt
@@ -313,6 +304,10 @@ jobs:
               issue_number: context.issue.number,
               body: body
             });
+
+      - name: Build Docker image
+        run: |
+          docker build -t echo-api:test .
 ```
 
 **What changed?**
@@ -323,40 +318,41 @@ jobs:
 4. **if: always()**: Ensures the comment is posted even if tests fail
 
 **Commit and push the update:**
+
 ```bash
-git checkout main
-git pull
 git checkout add-health-endpoint
-git merge main
 git add .github/workflows/ci.yml
 git commit -m "Add test results commenting to CI"
-git push
+git push origin add-health-endpoint
 ```
 
 Go back to your PR and watch the new workflow run. When it completes, you should see a comment appear with your test results!
 
 ## Part 5: Setting Up Docker Hub
 
-Before we can push images to Docker Hub, we need to configure authentication.
+Before we can push images to Docker Hub, we need to do some configuration.
 
 **Create a Docker Hub access token:**
-1. Log in to https://hub.docker.com
-2. Click your username → "Account Settings"
-3. Go to "Security" → "New Access Token"
-4. Name it "github-actions" and click "Generate"
-5. **Copy the token immediately** (you won't see it again)
 
-**Create a repository on Docker Hub:**
-1. Go to "Repositories" → "Create Repository"
-2. Name it `echo-api` (or whatever you prefer)
-3. Set visibility to "Public"
-4. Click "Create"
+1. Log in to https://hub.docker.com
+2. Go to "Account Settings" and click "Personal access tokens" on the left
+3. Click "Generate new token"
+4. Name it something like "github-actions" and give it "Read & Write" permissions
+5. Create the token and **copy the token** (you won't see it again)
 
 **Add secrets to your GitHub repository:**
+
 1. Go to your GitHub repo → "Settings" → "Secrets and variables" → "Actions"
 2. Click "New repository secret"
 3. Add `DOCKER_USERNAME` with your Docker Hub username
 4. Add `DOCKER_TOKEN` with the access token you just created
+
+**Create a repository on Docker Hub:**
+
+1. Go to "Repositories" → "Create Repository"
+2. Name it `echo-api` (or whatever you prefer)
+3. Set visibility to "Public"
+4. Click "Create"
 
 These secrets are encrypted and only available to your workflows. Never commit credentials to your repository!
 
@@ -429,6 +425,7 @@ Let's understand this workflow:
 **Login**: Authenticates to Docker Hub using your secrets
 
 **Metadata extraction**: Automatically generates image tags:
+
 - `main-<git-sha>`: Unique tag for this commit
 - `latest`: Always points to the most recent main build
 
