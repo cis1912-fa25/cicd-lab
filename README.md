@@ -126,7 +126,7 @@ Great! Now that we know everything works locally, let's automate this with GitHu
 
 ## Part 2: Creating the CI Workflow
 
-GitHub Actions workflows are defined in YAML files under `.github/workflows/`. This is the beauty of GitHub Actions, we don't need to spin up any additional infrastructure to run our CI/CD pipelines, GitHub handles all of it for us automatically based on the files we define! Otherwise, you would need to spin up various pieces of infrastructure, such as nodes to watch the repository and worker nodes to execute each step in the pipelines.
+GitHub Actions workflows are defined in YML files under `.github/workflows/`. This is the beauty of GitHub Actions, we don't need to spin up any additional infrastructure to run our CI/CD pipelines, GitHub handles all of it for us automatically based on the files we define! Otherwise, you would need to spin up various pieces of infrastructure, such as nodes to watch the repository and worker nodes to execute each step in the pipelines.
 
 Let's create our first workflow. First, create the github workflow directory:
 
@@ -134,9 +134,9 @@ Let's create our first workflow. First, create the github workflow directory:
 mkdir -p .github/workflows
 ```
 
-Then, create a file `.github/workflows/ci.yaml` and put the following inside:
+Then, create a file `.github/workflows/ci.yml` and put the following inside:
 
-```yaml
+```yml
 name: CI - Pull Request Checks
 
 on:
@@ -158,12 +158,10 @@ jobs:
         run: uv sync --locked --all-extras --dev
 
       - name: Run unit tests
-        run: |
-          uv run pytest -v
+        run: uv run pytest -v
 
       - name: Build Docker image
-        run: |
-          docker build -t echo-api:test .
+        run: docker build -t echo-api:test .
 ```
 
 Let's break down what this workflow does:
@@ -185,7 +183,7 @@ If you're interested, the [workflow syntax documentation](https://docs.github.co
 **Commit and push this workflow:**
 
 ```bash
-git add .github/workflows/ci.yaml
+git add .github/workflows/ci.yml
 git commit -m "Add CI workflow for pull requests"
 git push origin main
 ```
@@ -234,21 +232,17 @@ git push origin add-health-endpoint
 - Select your `add-health-endpoint` branch
 - Click "Create pull request"
 
-**Watch the workflow run:**
+GitHub provides a nice UI to watch our workflow run. You should see a window in your PR that shows the status of the workflow being executed. You can click into this to get the exact logs that happened at each step of our workflow, which is great for debugging when your tests fail!
 
-- You'll see a yellow dot next to your commit that changes to a green checkmark (or red X if it fails)
-- Click "Details" to see the full workflow execution logs
-- You should see all steps complete successfully
-
-This is great, but wouldn't it be nice to see the test results directly in the PR? Let's add that.
+Although, wouldn't it be even nicer to see the test results directly in the PR? Let's add that.
 
 ## Part 4: Adding PR Comments with Test Results
 
 We'll enhance our CI workflow to post test results as a comment on the PR. This gives reviewers immediate visibility into what passed or failed.
 
-**Update `.github/workflows/ci.yaml`:**
+**Update `.github/workflows/ci.yml`:**
 
-```yaml
+```yml
 name: CI - Pull Request Checks
 
 on:
@@ -265,26 +259,19 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Build Docker image
-        run: |
-          docker build -t echo-api:test .
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
 
-      - name: Run container
-        run: |
-          docker run -d -p 8000:8000 --name echo-api echo-api:test
-          sleep 3
-
-      - name: Install test dependencies
-        run: |
-          pip install pytest httpx
+      - name: Install project
+        run: uv sync --locked --all-extras --dev
 
       - name: Run tests and capture output
         id: pytest
         run: |
           set +e  # Don't exit on failure
-          pytest tests/ -v --tb=short > test_output.txt 2>&1
+          uv run pytest -v --tb=short > test_output.txt 2>&1
           TEST_EXIT_CODE=$?
           echo "exit_code=$TEST_EXIT_CODE" >> $GITHUB_OUTPUT
           cat test_output.txt
@@ -317,6 +304,10 @@ jobs:
               issue_number: context.issue.number,
               body: body
             });
+
+      - name: Build Docker image
+        run: |
+          docker build -t echo-api:test .
 ```
 
 **What changed?**
@@ -327,40 +318,41 @@ jobs:
 4. **if: always()**: Ensures the comment is posted even if tests fail
 
 **Commit and push the update:**
+
 ```bash
-git checkout main
-git pull
 git checkout add-health-endpoint
-git merge main
 git add .github/workflows/ci.yml
 git commit -m "Add test results commenting to CI"
-git push
+git push origin add-health-endpoint
 ```
 
 Go back to your PR and watch the new workflow run. When it completes, you should see a comment appear with your test results!
 
 ## Part 5: Setting Up Docker Hub
 
-Before we can push images to Docker Hub, we need to configure authentication.
+Before we can push images to Docker Hub, we need to do some configuration.
 
 **Create a Docker Hub access token:**
-1. Log in to https://hub.docker.com
-2. Click your username → "Account Settings"
-3. Go to "Security" → "New Access Token"
-4. Name it "github-actions" and click "Generate"
-5. **Copy the token immediately** (you won't see it again)
 
-**Create a repository on Docker Hub:**
-1. Go to "Repositories" → "Create Repository"
-2. Name it `echo-api` (or whatever you prefer)
-3. Set visibility to "Public"
-4. Click "Create"
+1. Log in to https://hub.docker.com
+2. Go to "Account Settings" and click "Personal access tokens" on the left
+3. Click "Generate new token"
+4. Name it something like "github-actions" and give it "Read & Write" permissions
+5. Create the token and **copy the token** (you won't see it again)
 
 **Add secrets to your GitHub repository:**
+
 1. Go to your GitHub repo → "Settings" → "Secrets and variables" → "Actions"
 2. Click "New repository secret"
 3. Add `DOCKER_USERNAME` with your Docker Hub username
 4. Add `DOCKER_TOKEN` with the access token you just created
+
+**Create a repository on Docker Hub:**
+
+1. Go to "Repositories" → "Create Repository"
+2. Name it `echo-api` (or whatever you prefer)
+3. Set visibility to "Public"
+4. Click "Create"
 
 These secrets are encrypted and only available to your workflows. Never commit credentials to your repository!
 
@@ -370,7 +362,7 @@ Now let's create a separate workflow that runs when code is merged to main. This
 
 **Create `.github/workflows/cd.yml`:**
 
-```yaml
+```yml
 name: CD - Deploy to Docker Hub
 
 on:
@@ -433,6 +425,7 @@ Let's understand this workflow:
 **Login**: Authenticates to Docker Hub using your secrets
 
 **Metadata extraction**: Automatically generates image tags:
+
 - `main-<git-sha>`: Unique tag for this commit
 - `latest`: Always points to the most recent main build
 
@@ -529,7 +522,7 @@ sequenceDiagram
 In production environments, you'd typically extend this pipeline with:
 
 **Security Scanning**:
-```yaml
+```yml
 - name: Run Trivy security scan
   uses: aquasecurity/trivy-action@master
   with:
@@ -539,7 +532,7 @@ In production environments, you'd typically extend this pipeline with:
 ```
 
 **Code Coverage**:
-```yaml
+```yml
 - name: Generate coverage report
   run: |
     pytest tests/ --cov=app --cov-report=html

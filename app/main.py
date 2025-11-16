@@ -9,3 +9,7 @@ def echo():
 @app.get("/echo/{name}")
 def echo_name(name: str):
     return {"message": f"Hello, {name}!"}
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
