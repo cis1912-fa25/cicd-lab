@@ -168,11 +168,9 @@ jobs:
 
 Let's break down what this workflow does:
 
-**Trigger (`on`)**: Runs automatically when a pull request targets the main branch
+**Trigger**: This is the `on:` object. Runs automatically when a pull request targets the main branch.
 
-**Job (`test`)**: Runs on GitHub's Ubuntu runners (free for public repos)
-
-**Steps**:
+**Job**: Defines a single job `test:`. Runs on GitHub's Ubuntu runners (free for public repos). This job has multiple steps:
 
 1. **Checkout code**: Gets your repository code using an action provided by GitHub
 2. **Install uv**: Installs uv using an action provided by Astral
@@ -321,10 +319,10 @@ jobs:
 
 **What changed?**
 
-1. **Permissions**: Added `pull-requests: write` so the workflow can comment on PRs
-2. **Run tests step**: Now captures output to a file and stores the exit code
-3. **Post results step**: Uses GitHub's script action to post a formatted comment with test results
-4. **if: always()**: Ensures the comment is posted even if tests fail
+1. **Permissions**: Added `pull-requests: write` so the workflow can comment on PRs.
+2. **Run tests step**: Now captures output to a file and stores the exit code.
+3. **Post results step**: Uses GitHub's script action to post a formatted comment with test results.
+4. **if: always()**: Ensures the comment is posted even if tests fail. Otherwise, any steps after a step fails will not run.
 
 **Commit and push the update:**
 ```bash
@@ -339,9 +337,9 @@ git push
 
 Go back to your PR and watch the new workflow run. When it completes, you should see a comment appear with your test results!
 
-## Part 5: Setting Up Docker Hub
+## Part 5: Setting up CD
 
-Before we can push images to Docker Hub, we need to configure authentication.
+Before we can push images to Docker Hub, we need to do some configuration to get GitHub Actions a token to use.
 
 **Create a Docker Hub access token:**
 1. Log in to https://hub.docker.com
@@ -356,13 +354,7 @@ Before we can push images to Docker Hub, we need to configure authentication.
 3. Set visibility to "Public"
 4. Click "Create"
 
-**Add secrets to your GitHub repository:**
-1. Go to your GitHub repo → "Settings" → "Secrets and variables" → "Actions"
-2. Click "New repository secret"
-3. Add `DOCKER_USERNAME` with your Docker Hub username
-4. Add `DOCKER_TOKEN` with the access token you just created
-
-These secrets are encrypted and only available to your workflows. Never commit credentials to your repository!
+These secrets are encrypted and only available to your workflows. You should never commit credentials to your repository!
 
 ## Part 6: Creating the CD Workflow
 
@@ -383,7 +375,16 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install project
+        run: uv sync --locked --all-extras --dev
+
+      - name: Run unit tests
+        run: uv run pytest -v
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -394,37 +395,15 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ secrets.DOCKER_USERNAME }}/echo-api
-          tags: |
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and test
-        run: |
-          docker build -t test-image .
-          docker run -d -p 8000:8000 --name echo-api test-image
-          sleep 3
-          pip install pytest httpx
-          pytest tests/ -v
-          docker stop echo-api
-          docker rm echo-api
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ secrets.DOCKER_USERNAME }}/echo-api:latest
 ```
 
-Let's understand this workflow:
+This workflow begins quite similarly to what we have defined for our CI workflow. Namely, we install uv and dependencies, then run tests. However, then, we additionally build
 
 **Trigger**: Runs on every push to main (i.e., when PRs are merged)
 
